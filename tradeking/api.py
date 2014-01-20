@@ -148,7 +148,7 @@ class News(object):
             if isinstance(keywords, types.StringTypes):
                 keywords = [keywords]
 
-            data['keyworks'] = ','.join(keywords)
+            data['keywords'] = ','.join(keywords)
 
         if symbols:
             if isinstance(symbols, types.StringTypes):

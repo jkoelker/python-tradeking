@@ -22,3 +22,10 @@ Obtain OAuth keys/secrets from
                                 oauth_secret=OAUTH_SECRET)
 
     quotes = tkapi.market.quotes('IBM')
+
+
+Note
+====
+
+In the near future the format of parsed results will return
+`Pandas <http://pandas.pydata.org/>`_ objects instead of dictionaries.

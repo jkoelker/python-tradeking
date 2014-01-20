@@ -4,6 +4,7 @@ import types
 import urlparse
 
 import requests_oauthlib as roauth
+import pandas as pd
 
 import utils
 
@@ -185,6 +186,20 @@ class Options(object):
     def __init__(self, api):
         self._api = api
 
+    @staticmethod
+    def symbol(underlying, expiration, call_put, strike):
+        call_put = call_put.upper()
+        if call_put not in ('C', 'P'):
+            raise ValueError("call_put value not one of ('C', 'P'): %s" %
+                             call_put)
+
+        expiration = pd.to_datetime(expiration).strftime('%y%m%d')
+
+        strike = str(int(strike * 1000))
+        strike = ('0' * (8 - len(strike))) + strike
+
+        return '%s%s%s%s' % (underlying, expiration, call_put, strike)
+
     def _expirations(self, symbol, **kwargs):
         params = {'symbol': symbol}
         path = self._api.join(BASE_URL, 'market', 'options', 'expirations')
@@ -210,15 +225,18 @@ class Options(object):
 
     def expirations(self, symbol):
         r = self._expirations(symbol=symbol)
-        return r['response']['expirationdates']['date']
+        expirations = r['response']['expirationdates']['date']
+        return pd.to_datetime(pd.Series(expirations))
 
     def search(self, symbol, query, fields=None):
         r = self._search(symbol=symbol, query=query, fields=fields)
-        return r['response']['quotes']['quote']
+        quotes = r['response']['quotes']['quote']
+        return pd.DataFrame.from_records(quotes, index='symbol')
 
     def strikes(self, symbol):
         r = self._strikes(symbol=symbol)
-        return r['response']['prices']['price']
+        strikes = r['response']['prices']['price']
+        return pd.Series(strikes, dtype=float)
 
 
 class Market(object):

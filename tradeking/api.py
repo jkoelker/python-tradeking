@@ -10,6 +10,60 @@ import utils
 
 
 BASE_URL = 'https://api.tradeking.com/v1'
+_DATE_KEYS = ('date', 'datetime', 'divexdate', 'divpaydt', 'timestamp',
+              'pr_date', 'wk52hidate', 'wk52lodate', 'xdate')
+_FLOAT_KEYS = ('ask', 'bid', 'chg', 'cl', 'div', 'dollar_value', 'eps',
+               'hi', 'iad', 'idelta', 'igamma', 'imp_volatility', 'irho',
+               'itheta', 'ivega', 'last', 'lo', 'opn', 'opt_val', 'pchg',
+               'pcls', 'pe', 'phi', 'plo', 'popn', 'pr_adp_100', 'pr_adp_200',
+               'pr_adp_50', 'prbook', 'prchg', 'strikeprice', 'volatility12',
+               'vwap', 'wk52hi', 'wk52lo', 'yield')
+_INT_KEYS = ('asksz', 'basis', 'bidsz', 'bidtick', 'days_to_expiration',
+             'incr_vl', 'openinterest', 'pr_openinterest', 'prem_mult', 'pvol',
+             'sho', 'tr_num', 'vl', 'xday', 'xmonth', 'xyear')
+
+
+def option_symbol(underlying, expiration, call_put, strike):
+    call_put = call_put.upper()
+    if call_put not in ('C', 'P'):
+        raise ValueError("call_put value not one of ('C', 'P'): %s" %
+                         call_put)
+
+    expiration = pd.to_datetime(expiration).strftime('%y%m%d')
+
+    strike = str(int(strike * 1000))
+    strike = ('0' * (8 - len(strike))) + strike
+
+    return '%s%s%s%s' % (underlying, expiration, call_put, strike)
+
+
+def parse_option_symbol(symbol):
+    strike = float(symbol[-8:]) / 1000
+    call_put = symbol[-9:-8].upper()
+    expiration = pd.to_datetime(symbol[-15:-9])
+    underlying = symbol[:-15].upper()
+    return underlying, expiration, call_put, strike
+
+
+def _quotes_to_df(quotes):
+    if not isinstance(quotes, types.ListType):
+        quotes = [quotes]
+    df = pd.DataFrame.from_records(quotes, index='symbol')
+
+    for col in df.keys().intersection(_DATE_KEYS):
+        df[col] = pd.to_datetime(df[col])
+
+    for col in df.keys().intersection(_INT_KEYS):
+        df[col] = df[col].str.replace(r'[$,%]', '').astype('int')
+
+    for col in df.keys().intersection(_FLOAT_KEYS):
+        df[col] = df[col].str.replace(r'[$,%]', '').astype('float')
+
+    if 'put_call' in df:
+        df.set_index(['undersymbol', 'xdate', 'put_call', 'strikeprice'],
+                     drop=False, inplace=True)
+
+    return df
 
 
 # TODO(jkoelker) Would be nice to do a proper DSL
@@ -186,19 +240,7 @@ class Options(object):
     def __init__(self, api):
         self._api = api
 
-    @staticmethod
-    def symbol(underlying, expiration, call_put, strike):
-        call_put = call_put.upper()
-        if call_put not in ('C', 'P'):
-            raise ValueError("call_put value not one of ('C', 'P'): %s" %
-                             call_put)
-
-        expiration = pd.to_datetime(expiration).strftime('%y%m%d')
-
-        strike = str(int(strike * 1000))
-        strike = ('0' * (8 - len(strike))) + strike
-
-        return '%s%s%s%s' % (underlying, expiration, call_put, strike)
+    symbol = staticmethod(option_symbol)
 
     def _expirations(self, symbol, **kwargs):
         params = {'symbol': symbol}
@@ -230,8 +272,7 @@ class Options(object):
 
     def search(self, symbol, query, fields=None):
         r = self._search(symbol=symbol, query=query, fields=fields)
-        quotes = r['response']['quotes']['quote']
-        return pd.DataFrame.from_records(quotes, index='symbol')
+        return _quotes_to_df(r['response']['quotes']['quote'])
 
     def strikes(self, symbol):
         r = self._strikes(symbol=symbol)
@@ -280,11 +321,11 @@ class Market(object):
 
     def quotes(self, symbols, fields=None):
         r = self._quotes(symbols=symbols, fields=fields)
-        return r['response']['quotes']['quote']
+        return _quotes_to_df(r['response']['quotes']['quote'])
 
     def toplist(self, list_type='toppctgainers'):
         r = self._toplist(list_type=list_type)
-        return r['response']['quotes']['quote']
+        return _quotes_to_df(r['response']['quotes']['quote'])
 
     # TODO(jkoelker) market/timesales
     # TODO(jkoelker) market/quotes (iterator)

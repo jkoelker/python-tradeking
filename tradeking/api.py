@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import itertools
 import types
 import urlparse
 
@@ -24,6 +25,7 @@ _INT_KEYS = ('asksz', 'basis', 'bidsz', 'bidtick', 'days_to_expiration',
 
 
 def option_symbol(underlying, expiration, call_put, strike):
+    '''Format an option symbol from its component parts.'''
     call_put = call_put.upper()
     if call_put not in ('C', 'P'):
         raise ValueError("call_put value not one of ('C', 'P'): %s" %
@@ -35,6 +37,23 @@ def option_symbol(underlying, expiration, call_put, strike):
     strike = ('0' * (8 - len(strike))) + strike
 
     return '%s%s%s%s' % (underlying, expiration, call_put, strike)
+
+
+def option_symbols(underlying, expirations, strikes, calls=True, puts=True):
+    '''Generate a list of option symbols for expirations and strikes.'''
+    if not calls and not puts:
+        raise ValueError('Either calls or puts must be true')
+
+    call_put = ''
+
+    if calls:
+        call_put = call_put + 'C'
+
+    if puts:
+        call_put = call_put + 'P'
+
+    return [option_symbol(*args) for args in
+            itertools.product([underlying], expirations, call_put, strikes)]
 
 
 def parse_option_symbol(symbol):
@@ -54,14 +73,12 @@ def _quotes_to_df(quotes):
         df[col] = pd.to_datetime(df[col])
 
     for col in df.keys().intersection(_INT_KEYS):
-        df[col] = df[col].str.replace(r'[$,%]', '').astype('int')
+        cleaned = df[col].str.replace(r'[$,%]', '')
+        df[col] = cleaned.astype('int', raise_on_error=False)
 
     for col in df.keys().intersection(_FLOAT_KEYS):
-        df[col] = df[col].str.replace(r'[$,%]', '').astype('float')
-
-    if 'put_call' in df:
-        df.set_index(['undersymbol', 'xdate', 'put_call', 'strikeprice'],
-                     drop=False, inplace=True)
+        cleaned = df[col].str.replace(r'[$,%]', '')
+        df[col] = cleaned.astype('float', raise_on_error=False)
 
     return df
 
@@ -87,6 +104,9 @@ class OptionQuery(object):
 
             if field not in self.FIELDS or op not in self.OPS:
                 continue
+
+            if field == 'xdate':
+                value = pd.to_datetime(value).strftime('%Y%m%d')
 
             self._query.append((field, self.OPS[op], value))
 
@@ -241,6 +261,7 @@ class Options(object):
         self._api = api
 
     symbol = staticmethod(option_symbol)
+    symbols = staticmethod(option_symbols)
 
     def _expirations(self, symbol, **kwargs):
         params = {'symbol': symbol}

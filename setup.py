@@ -19,5 +19,6 @@ setup(name='tradeking',
       install_requires=[
           'requests',
           'requests_oauthlib',
+          'pandas',
       ],
       )

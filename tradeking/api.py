@@ -57,6 +57,11 @@ def option_symbols(underlying, expirations, strikes, calls=True, puts=True):
 
 
 def parse_option_symbol(symbol):
+    '''
+    Parse an option symbol into its component parts.
+
+    returns (Underlying, Expiration C/P, strike)
+    '''
     strike = float(symbol[-8:]) / 1000
     call_put = symbol[-9:-8].upper()
     expiration = pd.to_datetime(symbol[-15:-9])
@@ -262,6 +267,7 @@ class Options(object):
 
     symbol = staticmethod(option_symbol)
     symbols = staticmethod(option_symbols)
+    decode = staticmethod(parse_option_symbol)
 
     def _expirations(self, symbol, **kwargs):
         params = {'symbol': symbol}

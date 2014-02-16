@@ -20,7 +20,7 @@ class Option(object):
         self._per_contract_fee = per_contract_fee
         self._tick_size = tick_size
 
-        cost = base_fee + (per_contract_fee * (contracts - 1))
+        self._cost = base_fee + (per_contract_fee * (contracts - 1))
 
         if not all((expiration, call_put, strike)):
             (symbol, expiration,
@@ -39,7 +39,7 @@ class Option(object):
         prices = pd.Series(np.arange(self._strike - self._price_range,
                                      self._strike + self._price_range,
                                      self._tick_size))
-        self._payoffs = prices.apply(func) - cost
+        self._payoffs = prices.apply(func) - self._cost
         self._payoffs.index = prices
 
         if long_short.upper() == utils.SHORT:
@@ -48,6 +48,10 @@ class Option(object):
     @property
     def payoffs(self):
         return self._payoffs
+
+    @property
+    def cost(self):
+        return self._cost
 
 
 class MultiLeg(object):
@@ -70,6 +74,10 @@ class MultiLeg(object):
     @property
     def payoffs(self):
         return sum([leg.payoffs for leg in self._legs])
+
+    @property
+    def cost(self):
+        return sum([leg.cost for leg in self._legs])
 
 
 def plot(option, ypad=2, ylim=None, **kwargs):

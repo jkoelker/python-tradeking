@@ -40,7 +40,7 @@ class Option(object):
         stop = self._strike + self._price_range + 1
         prices = pd.Series(xrange(start, stop, self._tick_size))
 
-        self._payoffs = prices.apply(func) - self._cost
+        self._payoffs = prices.apply(func)
         self._payoffs.index = prices
 
         if long_short.upper() == utils.SHORT:
@@ -86,7 +86,8 @@ class MultiLeg(object):
 
 def plot(option, ypad=2, ylim=None, **kwargs):
     index = [utils.Price._decode(i) for i in option.payoffs.index]
-    payoffs = pd.Series([utils.Price._decode(i) for i in option.payoffs],
+    payoffs = option.payoffs - option.cost
+    payoffs = pd.Series([utils.Price._decode(i) for i in payoffs],
                         index=index)
 
     if ylim is None:

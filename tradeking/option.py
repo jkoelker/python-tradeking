@@ -5,22 +5,20 @@ import pandas as pd
 import utils
 
 
-class Option(object):
+def tradeking_cost(num_legs, *args, **kwargs):
+    base_fee = utils.Price(4.95)
+    per_leg = utils.Price(0.65)
+    return base_fee + per_leg * num_legs
+
+
+class Leg(object):
     def __init__(self, symbol, long_short=utils.LONG, expiration=None,
                  call_put=None, strike=None, price_range=20,
-                 contracts=1, base_fee=4.95, per_contract_fee=0.65,
-                 tick_size=0.01):
-        if per_contract_fee is None:
-            per_contract_fee = base_fee
+                 cost_func=tradeking_cost, tick_size=0.01):
 
         self._price_range = utils.Price(price_range)
-        self._contracts = contracts
-        self._base_fee = base_fee
-        self._per_contract_fee = per_contract_fee
         self._tick_size = utils.Price(tick_size)
-
-        cost = base_fee + (per_contract_fee * (contracts - 1))
-        self._cost = utils.Price(cost)
+        self._cost_func = cost_func
 
         if not all((expiration, call_put, strike)):
             (symbol, expiration,
@@ -28,10 +26,13 @@ class Option(object):
 
         self._symbol = symbol
         self._expiration = expiration
-        self._call_put = call_put
+        self._call_put = call_put.upper()
+        self._long_short = long_short.upper()
         self._strike = utils.Price(strike)
 
-        if call_put.upper() == utils.PUT:
+    @utils.cached_property()
+    def payoffs(self):
+        if self._call_put == utils.PUT:
             func = lambda x: max(self._strike - x, 0)
         else:
             func = lambda x: max(x - self._strike, 0)
@@ -40,53 +41,52 @@ class Option(object):
         stop = self._strike + self._price_range + 1
         prices = pd.Series(xrange(start, stop, self._tick_size))
 
-        self._payoffs = prices.apply(func)
-        self._payoffs.index = prices
+        payoffs = prices.apply(func)
+        payoffs.index = prices
 
-        if long_short.upper() == utils.SHORT:
-            self._payoffs = self._payoffs * -1
+        if self._long_short == utils.SHORT:
+            payoffs = payoffs * -1
+        return payoffs
 
-    @property
-    def payoffs(self):
-        return self._payoffs
-
-    @property
+    @utils.cached_property()
     def cost(self):
-        return self._cost
+        return self._cost_func(1)
 
 
 class MultiLeg(object):
-    def __init__(self, *legs, **option_kwargs):
-        self.__option_kwargs = option_kwargs
+    def __init__(self, *legs, **leg_kwargs):
+        self._cost_func = leg_kwargs.pop('cost_func', tradeking_cost)
+        self.__leg_kwargs = leg_kwargs
         self._legs = []
 
         for leg in legs:
             self.add_leg(leg)
 
-    def add_leg(self, leg, **option_kwargs):
-        if not isinstance(leg, Option):
-            if not option_kwargs:
-                option_kwargs = self.__option_kwargs
+    def add_leg(self, leg, **leg_kwargs):
+        if not isinstance(leg, Leg):
+            if not leg_kwargs:
+                leg_kwargs = self.__leg_kwargs
 
-            leg = Option(leg, **option_kwargs)
+            leg = Leg(leg, **leg_kwargs)
 
         self._legs.append(leg)
 
-    @property
+    @utils.cached_property()
     def payoffs(self):
         payoffs = pd.Series()
         for leg in self._legs:
             payoffs = payoffs.add(leg.payoffs, fill_value=0)
         return payoffs
 
-    @property
+    @utils.cached_property()
     def cost(self):
-        return sum([leg.cost for leg in self._legs])
+        return self._cost_func(len(self._legs))
 
 
 def plot(option, ypad=2, ylim=None, **kwargs):
     index = [utils.Price._decode(i) for i in option.payoffs.index]
-    payoffs = option.payoffs - option.cost
+    #payoffs = option.payoffs - option.cost
+    payoffs = option.payoffs
     payoffs = pd.Series([utils.Price._decode(i) for i in payoffs],
                         index=index)
 
@@ -96,5 +96,5 @@ def plot(option, ypad=2, ylim=None, **kwargs):
     return pd.tools.plotting.plot_series(payoffs, ylim=ylim, **kwargs)
 
 
-Option.plot = plot
+Leg.plot = plot
 MultiLeg.plot = plot

@@ -12,6 +12,30 @@ LONG = 'L'
 SHORT = 'S'
 
 
+class Price(long):
+    BASE = 1000.0
+
+    def __new__(cls, value=0):
+        return long.__new__(cls, cls.encode(value))
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        return self.decode().__repr__()
+
+    @classmethod
+    def encode(cls, value):
+        return long(value * cls.BASE)
+
+    @classmethod
+    def _decode(cls, value):
+        return float(value) / cls.BASE
+
+    def decode(self):
+        return self._decode(self.real)
+
+
 def option_symbol(underlying, expiration, call_put, strike):
     '''Format an option symbol from its component parts.'''
     call_put = call_put.upper()
@@ -21,7 +45,7 @@ def option_symbol(underlying, expiration, call_put, strike):
 
     expiration = pd.to_datetime(expiration).strftime('%y%m%d')
 
-    strike = str(int(strike * 1000))
+    strike = str(Price.encode(strike)).rstrip('L')
     strike = ('0' * (8 - len(strike))) + strike
 
     return '%s%s%s%s' % (underlying, expiration, call_put, strike)
@@ -50,7 +74,7 @@ def parse_option_symbol(symbol):
 
     returns (Underlying, Expiration, C/P, strike)
     '''
-    strike = float(symbol[-8:]) / 1000
+    strike = Price._decode(symbol[-8:])
     call_put = symbol[-9:-8].upper()
     expiration = pd.to_datetime(symbol[-15:-9])
     underlying = symbol[:-15].upper()

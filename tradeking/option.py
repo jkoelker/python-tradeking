@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import pandas as pd
 
 import utils
@@ -14,13 +13,14 @@ class Option(object):
         if per_contract_fee is None:
             per_contract_fee = base_fee
 
-        self._price_range = price_range
+        self._price_range = utils.Price(price_range)
         self._contracts = contracts
         self._base_fee = base_fee
         self._per_contract_fee = per_contract_fee
-        self._tick_size = tick_size
+        self._tick_size = utils.Price(tick_size)
 
-        self._cost = base_fee + (per_contract_fee * (contracts - 1))
+        cost = base_fee + (per_contract_fee * (contracts - 1))
+        self._cost = utils.Price(cost)
 
         if not all((expiration, call_put, strike)):
             (symbol, expiration,
@@ -29,16 +29,17 @@ class Option(object):
         self._symbol = symbol
         self._expiration = expiration
         self._call_put = call_put
-        self._strike = strike
+        self._strike = utils.Price(strike)
 
         if call_put.upper() == utils.PUT:
             func = lambda x: max(self._strike - x, 0)
         else:
             func = lambda x: max(x - self._strike, 0)
 
-        prices = pd.Series(np.arange(self._strike - self._price_range,
-                                     self._strike + self._price_range,
-                                     self._tick_size))
+        start = self._strike - self._price_range
+        stop = self._strike + self._price_range + 1
+        prices = pd.Series(xrange(start, stop, self._tick_size))
+
         self._payoffs = prices.apply(func) - self._cost
         self._payoffs.index = prices
 
@@ -73,7 +74,10 @@ class MultiLeg(object):
 
     @property
     def payoffs(self):
-        return sum([leg.payoffs for leg in self._legs])
+        payoffs = pd.Series()
+        for leg in self._legs:
+            payoffs = payoffs.add(leg.payoffs, fill_value=0)
+        return payoffs
 
     @property
     def cost(self):
@@ -81,10 +85,14 @@ class MultiLeg(object):
 
 
 def plot(option, ypad=2, ylim=None, **kwargs):
-    if ylim is None:
-        ylim = (option.payoffs.min() - ypad, option.payoffs.max() + ypad)
+    index = [utils.Price._decode(i) for i in option.payoffs.index]
+    payoffs = pd.Series([utils.Price._decode(i) for i in option.payoffs],
+                        index=index)
 
-    return pd.tools.plotting.plot_series(option.payoffs, ylim=ylim, **kwargs)
+    if ylim is None:
+        ylim = (payoffs.min() - ypad, payoffs.max() + ypad)
+
+    return pd.tools.plotting.plot_series(payoffs, ylim=ylim, **kwargs)
 
 
 Option.plot = plot

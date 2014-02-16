@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import itertools
 import types
 import urlparse
 
@@ -22,51 +21,6 @@ _FLOAT_KEYS = ('ask', 'bid', 'chg', 'cl', 'div', 'dollar_value', 'eps',
 _INT_KEYS = ('asksz', 'basis', 'bidsz', 'bidtick', 'days_to_expiration',
              'incr_vl', 'openinterest', 'pr_openinterest', 'prem_mult', 'pvol',
              'sho', 'tr_num', 'vl', 'xday', 'xmonth', 'xyear')
-
-
-def option_symbol(underlying, expiration, call_put, strike):
-    '''Format an option symbol from its component parts.'''
-    call_put = call_put.upper()
-    if call_put not in ('C', 'P'):
-        raise ValueError("call_put value not one of ('C', 'P'): %s" %
-                         call_put)
-
-    expiration = pd.to_datetime(expiration).strftime('%y%m%d')
-
-    strike = str(int(strike * 1000))
-    strike = ('0' * (8 - len(strike))) + strike
-
-    return '%s%s%s%s' % (underlying, expiration, call_put, strike)
-
-
-def option_symbols(underlying, expirations, strikes, calls=True, puts=True):
-    '''Generate a list of option symbols for expirations and strikes.'''
-    if not calls and not puts:
-        raise ValueError('Either calls or puts must be true')
-
-    call_put = ''
-
-    if calls:
-        call_put = call_put + 'C'
-
-    if puts:
-        call_put = call_put + 'P'
-
-    return [option_symbol(*args) for args in
-            itertools.product([underlying], expirations, call_put, strikes)]
-
-
-def parse_option_symbol(symbol):
-    '''
-    Parse an option symbol into its component parts.
-
-    returns (Underlying, Expiration C/P, strike)
-    '''
-    strike = float(symbol[-8:]) / 1000
-    call_put = symbol[-9:-8].upper()
-    expiration = pd.to_datetime(symbol[-15:-9])
-    underlying = symbol[:-15].upper()
-    return underlying, expiration, call_put, strike
 
 
 def _quotes_to_df(quotes):
@@ -265,9 +219,9 @@ class Options(object):
     def __init__(self, api):
         self._api = api
 
-    symbol = staticmethod(option_symbol)
-    symbols = staticmethod(option_symbols)
-    decode = staticmethod(parse_option_symbol)
+    symbol = staticmethod(utils.option_symbol)
+    symbols = staticmethod(utils.option_symbols)
+    decode = staticmethod(utils.parse_option_symbol)
 
     def _expirations(self, symbol, **kwargs):
         params = {'symbol': symbol}

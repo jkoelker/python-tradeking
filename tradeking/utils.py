@@ -1,12 +1,65 @@
 # -*- coding: utf-8 -*-
 
+import itertools
+import time
+
+import pandas as pd
+
+
+CALL = 'C'
+PUT = 'P'
+LONG = 'L'
+SHORT = 'S'
+
+
+def option_symbol(underlying, expiration, call_put, strike):
+    '''Format an option symbol from its component parts.'''
+    call_put = call_put.upper()
+    if call_put not in (CALL, PUT):
+        raise ValueError("call_put value not one of ('%s', '%s'): %s" %
+                         (CALL, PUT, call_put))
+
+    expiration = pd.to_datetime(expiration).strftime('%y%m%d')
+
+    strike = str(int(strike * 1000))
+    strike = ('0' * (8 - len(strike))) + strike
+
+    return '%s%s%s%s' % (underlying, expiration, call_put, strike)
+
+
+def option_symbols(underlying, expirations, strikes, calls=True, puts=True):
+    '''Generate a list of option symbols for expirations and strikes.'''
+    if not calls and not puts:
+        raise ValueError('Either calls or puts must be true')
+
+    call_put = ''
+
+    if calls:
+        call_put = call_put + CALL
+
+    if puts:
+        call_put = call_put + PUT
+
+    return [option_symbol(*args) for args in
+            itertools.product([underlying], expirations, call_put, strikes)]
+
+
+def parse_option_symbol(symbol):
+    '''
+    Parse an option symbol into its component parts.
+
+    returns (Underlying, Expiration, C/P, strike)
+    '''
+    strike = float(symbol[-8:]) / 1000
+    call_put = symbol[-9:-8].upper()
+    expiration = pd.to_datetime(symbol[-15:-9])
+    underlying = symbol[:-15].upper()
+    return underlying, expiration, call_put, strike
+
+
 #
 # © 2011 Christopher Arndt, MIT License
 #
-
-import time
-
-
 class cached_property(object):
     '''
     Decorator for read-only properties evaluated only once within TTL period.

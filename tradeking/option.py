@@ -1,8 +1,19 @@
 # -*- coding: utf-8 -*-
 
+import logging
+
 import pandas as pd
 
+import api
 import utils
+
+
+LOG = logging.getLogger(__name__)
+
+
+def bid_ask_avg(symbol, quotes):
+    mean = quotes[['bid', 'ask']].T.mean()
+    return utils.Price(mean[symbol])
 
 
 def tradeking_cost(num_legs, *args, **kwargs):
@@ -11,12 +22,29 @@ def tradeking_cost(num_legs, *args, **kwargs):
     return base_fee + per_leg * num_legs
 
 
-def tradeking_premium(symbol, tkapi=None, *args, **kwargs):
+def tradeking_premium(tkapi=None, price_func=bid_ask_avg, **kwargs):
     if tkapi is None:
-        return 0
+        consumer_key = kwargs.get('consumer_key')
+        consumer_secret = kwargs.get('consumer_secret')
+        oauth_token = kwargs.get('oauth_token')
+        oauth_secret = kwargs.get('oauth_secret')
 
-    def premium():
-        return 0
+        if not all((consumer_key, consumer_secret, oauth_token, oauth_secret)):
+            LOG.warning('No tkapi or tokens found. All premiums will be 0.')
+
+            def zero(symbol, *args, **kwargs):
+                return 0
+
+            return zero
+
+        tkapi = api.TradeKing(consumer_key=consumer_key,
+                              consumer_secret=consumer_secret,
+                              oauth_token=oauth_token,
+                              oauth_secret=oauth_secret)
+
+    def premium(symbol, *args, **kwargs):
+        quotes = tkapi.market.quotes(symbol)
+        return price_func(symbol, quotes)
 
     return premium
 
@@ -24,7 +52,10 @@ def tradeking_premium(symbol, tkapi=None, *args, **kwargs):
 class Leg(object):
     def __init__(self, symbol, long_short=utils.LONG, expiration=None,
                  call_put=None, strike=None, price_range=20, tick_size=0.01,
-                 cost_func=tradeking_cost, premium_func=tradeking_premium):
+                 cost_func=tradeking_cost, premium_func=None, **kwargs):
+
+        if premium_func is None:
+            premium_func = tradeking_premium(**kwargs)
 
         price_range = utils.Price(price_range)
         self._tick_size = utils.Price(tick_size)
@@ -121,7 +152,7 @@ class MultiLeg(object):
         return sum([leg.premium for leg in self._legs])
 
 
-def plot(option, ypad=2, ylim=None, include_cost=True, include_premium=True,
+def plot(option, ypad=5, ylim=None, include_cost=True, include_premium=True,
          **kwargs):
     payoffs = option.payoffs
     index = [utils.Price._decode(i) for i in payoffs.index]

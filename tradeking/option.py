@@ -21,10 +21,11 @@ class Leg(object):
         self._cost_func = cost_func
 
         if not all((expiration, call_put, strike)):
-            (symbol, expiration,
+            (underlying, expiration,
              call_put, strike) = utils.parse_option_symbol(symbol)
 
         self._symbol = symbol
+        self._underlying = underlying
         self._expiration = expiration
         self._call_put = call_put.upper()
         self._long_short = long_short.upper()

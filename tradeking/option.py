@@ -63,11 +63,12 @@ class Leg(object):
         self._premium_func = premium_func
 
         if not all((expiration, call_put, strike)):
-            (underlying, expiration,
+            (symbol, expiration,
              call_put, strike) = utils.parse_option_symbol(symbol)
 
-        self._symbol = symbol
-        self._underlying = underlying
+        self._symbol = utils.option_symbol(symbol, expiration, call_put,
+                                           strike)
+        self._underlying = symbol
         self._expiration = expiration
         self._call_put = call_put.upper()
         self._long_short = long_short.upper()
@@ -151,6 +152,13 @@ class MultiLeg(object):
             self.add_leg(leg)
 
     def add_leg(self, leg, **leg_kwargs):
+        '''
+        Add a leg to the MultiLeg.
+
+        `leg` can either be an option symbol or an Leg instance. If it is
+            an option symbol then either **leg_kwargs or the leg_kwargs to
+            MultiLeg is used to construct the Leg, preferring **leg_kwargs.
+        '''
         if not isinstance(leg, Leg):
             if not leg_kwargs:
                 leg_kwargs = self.__leg_kwargs
@@ -203,6 +211,34 @@ class MultiLeg(object):
     @utils.cached_property()
     def premium(self):
         return sum([leg.premium for leg in self._legs])
+
+
+def Call(symbol, long_short=utils.LONG, expiration=None, strike=None,
+         **leg_kwargs):
+    if not all((expiration, strike)):
+        (underlying, expiration,
+         call_put, strike) = utils.parse_option_symbol(symbol)
+
+    # NOTE(jkoelker) Ignore anything that was parsed, this is a Call
+    call_put = utils.CALL
+
+    leg = Leg(underlying, long_short=long_short, call_put=call_put,
+              expiration=expiration, strike=strike, **leg_kwargs)
+    return MultiLeg(leg, **leg_kwargs)
+
+
+def Put(symbol, long_short=utils.LONG, expiration=None, strike=None,
+        **leg_kwargs):
+    if not all((expiration, strike)):
+        (underlying, expiration,
+         call_put, strike) = utils.parse_option_symbol(symbol)
+
+    # NOTE(jkoelker) Ignore anything that was parsed, this is a Put
+    call_put = utils.PUT
+
+    leg = Leg(underlying, long_short=long_short, call_put=call_put,
+              expiration=expiration, strike=strike, **leg_kwargs)
+    return MultiLeg(leg, **leg_kwargs)
 
 
 def plot(option, ypad=5, ylim=None, include_cost=True, include_premium=True,

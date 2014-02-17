@@ -16,7 +16,7 @@ class Leg(object):
                  call_put=None, strike=None, price_range=20,
                  cost_func=tradeking_cost, tick_size=0.01):
 
-        self._price_range = utils.Price(price_range)
+        price_range = utils.Price(price_range)
         self._tick_size = utils.Price(tick_size)
         self._cost_func = cost_func
 
@@ -29,6 +29,15 @@ class Leg(object):
         self._call_put = call_put.upper()
         self._long_short = long_short.upper()
         self._strike = utils.Price(strike)
+        self._start = self._strike - price_range
+        self._stop = self._strike + price_range + 1
+
+    def reset_start_stop(self, start, stop):
+        if hasattr(self, '_cache') and 'payoffs' in self._cache:
+            del self._cache['payoffs']
+
+        self._start = start
+        self._stop = stop
 
     @utils.cached_property()
     def payoffs(self):
@@ -37,9 +46,7 @@ class Leg(object):
         else:
             func = lambda x: max(x - self._strike, 0)
 
-        start = self._strike - self._price_range
-        stop = self._strike + self._price_range + 1
-        prices = pd.Series(xrange(start, stop, self._tick_size))
+        prices = pd.Series(xrange(self._start, self._stop, self._tick_size))
 
         payoffs = prices.apply(func)
         payoffs.index = prices
@@ -73,6 +80,12 @@ class MultiLeg(object):
 
     @utils.cached_property()
     def payoffs(self):
+        start = min([leg._start for leg in self._legs])
+        stop = min([leg._stop for leg in self._legs])
+
+        for leg in self._legs:
+            leg.reset_start_stop(start, stop)
+
         payoffs = pd.Series()
         for leg in self._legs:
             payoffs = payoffs.add(leg.payoffs, fill_value=0)
@@ -83,10 +96,11 @@ class MultiLeg(object):
         return self._cost_func(len(self._legs))
 
 
-def plot(option, ypad=2, ylim=None, **kwargs):
-    index = [utils.Price._decode(i) for i in option.payoffs.index]
-    #payoffs = option.payoffs - option.cost
+def plot(option, include_cost=True, ypad=2, ylim=None, **kwargs):
     payoffs = option.payoffs
+    index = [utils.Price._decode(i) for i in payoffs.index]
+    if include_cost:
+        payoffs = payoffs - option.cost
     payoffs = pd.Series([utils.Price._decode(i) for i in payoffs],
                         index=index)
 

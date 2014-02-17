@@ -11,14 +11,25 @@ def tradeking_cost(num_legs, *args, **kwargs):
     return base_fee + per_leg * num_legs
 
 
+def tradeking_premium(symbol, tkapi=None, *args, **kwargs):
+    if tkapi is None:
+        return 0
+
+    def premium():
+        return 0
+
+    return premium
+
+
 class Leg(object):
     def __init__(self, symbol, long_short=utils.LONG, expiration=None,
-                 call_put=None, strike=None, price_range=20,
-                 cost_func=tradeking_cost, tick_size=0.01):
+                 call_put=None, strike=None, price_range=20, tick_size=0.01,
+                 cost_func=tradeking_cost, premium_func=tradeking_premium):
 
         price_range = utils.Price(price_range)
         self._tick_size = utils.Price(tick_size)
         self._cost_func = cost_func
+        self._premium_func = premium_func
 
         if not all((expiration, call_put, strike)):
             (underlying, expiration,
@@ -60,6 +71,15 @@ class Leg(object):
     def cost(self):
         return self._cost_func(1)
 
+    @utils.cached_property()
+    def premium(self):
+        premium = self._premium_func(self._symbol)
+
+        if self._long_short == utils.SHORT:
+            premium = premium * -1
+
+        return premium
+
 
 class MultiLeg(object):
     def __init__(self, *legs, **leg_kwargs):
@@ -96,12 +116,22 @@ class MultiLeg(object):
     def cost(self):
         return self._cost_func(len(self._legs))
 
+    @utils.cached_property()
+    def premium(self):
+        return sum([leg.premium for leg in self._legs])
 
-def plot(option, include_cost=True, ypad=2, ylim=None, **kwargs):
+
+def plot(option, ypad=2, ylim=None, include_cost=True, include_premium=True,
+         **kwargs):
     payoffs = option.payoffs
     index = [utils.Price._decode(i) for i in payoffs.index]
+
     if include_cost:
         payoffs = payoffs - option.cost
+
+    if include_premium:
+        payoffs = payoffs - option.premium
+
     payoffs = pd.Series([utils.Price._decode(i) for i in payoffs],
                         index=index)
 

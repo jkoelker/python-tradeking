@@ -75,6 +75,11 @@ class Leg(object):
         self._start = self._strike - price_range
         self._stop = self._strike + price_range + 1
 
+        if self._call_put == utils.PUT:
+            self._payoff_func = lambda x: max(self._strike - x, 0)
+        else:
+            self._payoff_func = lambda x: max(x - self._strike, 0)
+
     def reset_start_stop(self, start, stop):
         if hasattr(self, '_cache') and 'payoffs' in self._cache:
             del self._cache['payoffs']
@@ -82,16 +87,40 @@ class Leg(object):
         self._start = start
         self._stop = stop
 
+    def payoff(self, price):
+        '''
+        Evaluate the payoff for the leg at price.
+
+        `price` *MUST* be a decimal shifted int/long. That is the price 7.95 is
+            represented  as 7950. Wrap the price in utils.Price to easily
+            convert prior to passing to this function.
+
+            E.g.
+
+            price = 7.95
+            price = utils.Price(price)
+
+
+        returns a decimal shifted int/long. Use utils.Price.decode to convert
+            to a float.
+
+            E.g
+
+            result = payoff(price)
+            result = utils.Price.decode(result)
+        '''
+        payoff = self._payoff_func(price)
+
+        if self._long_short == utils.SHORT:
+            payoff = payoff * -1
+
+        return payoff
+
     @utils.cached_property()
     def payoffs(self):
-        if self._call_put == utils.PUT:
-            func = lambda x: max(self._strike - x, 0)
-        else:
-            func = lambda x: max(x - self._strike, 0)
-
         prices = pd.Series(xrange(self._start, self._stop, self._tick_size))
 
-        payoffs = prices.apply(func)
+        payoffs = prices.apply(self._payoff_func)
         payoffs.index = prices
 
         if self._long_short == utils.SHORT:
@@ -130,6 +159,30 @@ class MultiLeg(object):
 
         self._legs.append(leg)
 
+    def payoff(self, price):
+        '''
+        Evaluate the payoff for the MultiLeg at price.
+
+        `price` *MUST* be a decimal shifted int/long. That is the price 7.95 is
+            represented  as 7950. Wrap the price in utils.Price to easily
+            convert prior to passing to this function.
+
+            E.g.
+
+            price = 7.95
+            price = utils.Price(price)
+
+
+        returns a decimal shifted int/long. Use utils.Price.decode to convert
+            to a float.
+
+            E.g
+
+            result = payoff(price)
+            result = utils.Price.decode(result)
+        '''
+        return sum([leg.payoff(price)for leg in self._legs])
+
     @utils.cached_property()
     def payoffs(self):
         start = min([leg._start for leg in self._legs])
@@ -155,7 +208,7 @@ class MultiLeg(object):
 def plot(option, ypad=5, ylim=None, include_cost=True, include_premium=True,
          **kwargs):
     payoffs = option.payoffs
-    index = [utils.Price._decode(i) for i in payoffs.index]
+    index = [utils.Price.decode(i) for i in payoffs.index]
 
     if include_cost:
         payoffs = payoffs - option.cost
@@ -163,7 +216,7 @@ def plot(option, ypad=5, ylim=None, include_cost=True, include_premium=True,
     if include_premium:
         payoffs = payoffs - option.premium
 
-    payoffs = pd.Series([utils.Price._decode(i) for i in payoffs],
+    payoffs = pd.Series([utils.Price.decode(i) for i in payoffs],
                         index=index)
 
     if ylim is None:

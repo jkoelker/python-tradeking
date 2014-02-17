@@ -22,18 +22,18 @@ class Price(long):
         return self.__repr__()
 
     def __repr__(self):
-        return self.decode().__repr__()
+        return self._decode().__repr__()
 
     @classmethod
     def encode(cls, value):
         return long(value * cls.BASE)
 
     @classmethod
-    def _decode(cls, value):
+    def decode(cls, value):
         return float(value) / cls.BASE
 
-    def decode(self):
-        return self._decode(self.real)
+    def _decode(self):
+        return self.decode(self.real)
 
 
 def option_symbol(underlying, expiration, call_put, strike):
@@ -74,7 +74,7 @@ def parse_option_symbol(symbol):
 
     returns (Underlying, Expiration, C/P, strike)
     '''
-    strike = Price._decode(symbol[-8:])
+    strike = Price.decode(symbol[-8:])
     call_put = symbol[-9:-8].upper()
     expiration = pd.to_datetime(symbol[-15:-9])
     underlying = symbol[:-15].upper()

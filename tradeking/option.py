@@ -194,7 +194,7 @@ class MultiLeg(object):
     @utils.cached_property()
     def payoffs(self):
         start = min([leg._start for leg in self._legs])
-        stop = min([leg._stop for leg in self._legs])
+        stop = max([leg._stop for leg in self._legs])
 
         for leg in self._legs:
             leg.reset_start_stop(start, stop)
@@ -213,32 +213,67 @@ class MultiLeg(object):
         return sum([leg.premium for leg in self._legs])
 
 
+def _leg(symbol, long_short, call_put, expiration=None, strike=None,
+         **leg_kwargs):
+
+    if not all((expiration, strike)):
+        (symbol, expiration,
+         _call_put, strike) = utils.parse_option_symbol(symbol)
+
+    return Leg(symbol, long_short=long_short, call_put=call_put,
+               expiration=expiration, strike=strike, **leg_kwargs)
+
+
 def Call(symbol, long_short=utils.LONG, expiration=None, strike=None,
          **leg_kwargs):
-    if not all((expiration, strike)):
-        (underlying, expiration,
-         call_put, strike) = utils.parse_option_symbol(symbol)
-
     # NOTE(jkoelker) Ignore anything that was parsed, this is a Call
     call_put = utils.CALL
-
-    leg = Leg(underlying, long_short=long_short, call_put=call_put,
-              expiration=expiration, strike=strike, **leg_kwargs)
-    return MultiLeg(leg, **leg_kwargs)
+    return MultiLeg(_leg(symbol, long_short, call_put, expiration=expiration,
+                         strike=strike, **leg_kwargs), **leg_kwargs)
 
 
 def Put(symbol, long_short=utils.LONG, expiration=None, strike=None,
         **leg_kwargs):
-    if not all((expiration, strike)):
-        (underlying, expiration,
-         call_put, strike) = utils.parse_option_symbol(symbol)
-
     # NOTE(jkoelker) Ignore anything that was parsed, this is a Put
     call_put = utils.PUT
+    return MultiLeg(_leg(symbol, long_short, call_put, expiration=expiration,
+                         strike=strike, **leg_kwargs), **leg_kwargs)
 
-    leg = Leg(underlying, long_short=long_short, call_put=call_put,
-              expiration=expiration, strike=strike, **leg_kwargs)
-    return MultiLeg(leg, **leg_kwargs)
+
+def Straddle(symbol, long_short=utils.LONG, expiration=None, strike=None,
+             **leg_kwargs):
+    put = _leg(symbol, long_short=long_short, call_put=utils.PUT,
+               expiration=expiration, strike=strike, **leg_kwargs)
+    call = _leg(symbol, long_short=long_short, call_put=utils.CALL,
+                expiration=expiration, strike=strike, **leg_kwargs)
+    return MultiLeg(put, call, **leg_kwargs)
+
+
+def Strangle(symbol, call_strike, put_strike, long_short=utils.LONG,
+             expiration=None,  **leg_kwargs):
+    if not expiration:
+        (symbol, expiration,
+         _call_put, _strike) = utils.parse_option_symbol(symbol)
+
+    put = _leg(symbol, long_short=long_short, call_put=utils.PUT,
+               expiration=expiration, strike=put_strike, **leg_kwargs)
+    call = _leg(symbol, long_short=long_short, call_put=utils.CALL,
+                expiration=expiration, strike=call_strike, **leg_kwargs)
+    return MultiLeg(put, call, **leg_kwargs)
+
+
+def Collar(symbol, put_strike, call_strike, expiration=None, **leg_kwargs):
+
+    if not expiration:
+        (symbol, expiration,
+         _call_put, _strike) = utils.parse_option_symbol(symbol)
+
+    put = _leg(symbol, long_short=utils.LONG, call_put=utils.PUT,
+               expiration=expiration, strike=put_strike, **leg_kwargs)
+    call = _leg(symbol, long_short=utils.SHORT, call_put=utils.CALL,
+                expiration=expiration, strike=call_strike, **leg_kwargs)
+
+    return MultiLeg(put, call, **leg_kwargs)
 
 
 def plot(option, ypad=5, ylim=None, include_cost=True, include_premium=True,

@@ -4,8 +4,8 @@ import logging
 
 import pandas as pd
 
-import api
-import utils
+from tradeking import api
+from tradeking import utils
 
 
 LOG = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class Leg(object):
         '''
         Evaluate the payoff for the leg at price.
 
-        `price` *MUST* be a decimal shifted int/long. That is the price 7.95 is
+        `price` *MUST* be a decimal shifted int. That is the price 7.95 is
             represented  as 7950. Wrap the price in utils.Price to easily
             convert prior to passing to this function.
 
@@ -119,7 +119,7 @@ class Leg(object):
 
     @utils.cached_property()
     def payoffs(self):
-        prices = pd.Series(xrange(self._start, self._stop, self._tick_size))
+        prices = pd.Series(range(self._start, self._stop, self._tick_size))
 
         payoffs = prices.apply(self._payoff_func)
         payoffs.index = prices

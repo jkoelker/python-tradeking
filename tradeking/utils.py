@@ -12,11 +12,11 @@ LONG = 'L'
 SHORT = 'S'
 
 
-class Price(long):
+class Price(int):
     BASE = 1000.0
 
     def __new__(cls, value=0):
-        return long.__new__(cls, cls.encode(value))
+        return int.__new__(cls, cls.encode(value))
 
     def __str__(self):
         return self.__repr__()
@@ -26,7 +26,7 @@ class Price(long):
 
     @classmethod
     def encode(cls, value):
-        return long(value * cls.BASE)
+        return int(value * cls.BASE)
 
     @classmethod
     def decode(cls, value):

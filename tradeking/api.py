@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 
-import types
-import urlparse
+import urllib.parse
 
 import requests_oauthlib as roauth
 import pandas as pd
 
-import utils
+from tradeking import utils
 
 
 BASE_URL = 'https://api.tradeking.com/v1'
@@ -24,20 +23,27 @@ _INT_KEYS = ('asksz', 'basis', 'bidsz', 'bidtick', 'days_to_expiration',
 
 
 def _quotes_to_df(quotes):
-    if not isinstance(quotes, types.ListType):
+    if not isinstance(quotes, list):
         quotes = [quotes]
     df = pd.DataFrame.from_records(quotes, index='symbol')
 
     for col in df.keys().intersection(_DATE_KEYS):
-        df[col] = pd.to_datetime(df[col])
+        kwargs = {}
+        if col == 'timestamp':
+            kwargs['unit'] = 's'
+
+        try:
+            df[col] = pd.to_datetime(df[col], **kwargs)
+        except ValueError:
+            pass
 
     for col in df.keys().intersection(_INT_KEYS):
         cleaned = df[col].str.replace(r'[$,%]', '')
-        df[col] = cleaned.astype('int', raise_on_error=False)
+        df[col] = cleaned.astype('int', errors='ignore')
 
     for col in df.keys().intersection(_FLOAT_KEYS):
         cleaned = df[col].str.replace(r'[$,%]', '')
-        df[col] = cleaned.astype('float', raise_on_error=False)
+        df[col] = cleaned.astype('float', errors='ignore')
 
     return df
 
@@ -52,7 +58,7 @@ class OptionQuery(object):
            '=': 'eq', '==': 'eq', 'eq': 'eq'}
 
     def __init__(self, query):
-        if isinstance(query, types.StringTypes):
+        if isinstance(query, str):
             query = [query]
 
         self._query = []
@@ -178,13 +184,13 @@ class News(object):
         data = {}
 
         if keywords:
-            if isinstance(keywords, types.StringTypes):
+            if isinstance(keywords, str):
                 keywords = [keywords]
 
             data['keywords'] = ','.join(keywords)
 
         if symbols:
-            if isinstance(symbols, types.StringTypes):
+            if isinstance(symbols, str):
                 symbols = [symbols]
 
             data['symbols'] = ','.join(symbols)
@@ -270,7 +276,7 @@ class Market(object):
         return self._api.get(path, **kwargs)
 
     def _quotes(self, symbols, fields=None, **kwargs):
-        if isinstance(symbols, (types.ListType, types.TupleType)):
+        if isinstance(symbols, (list, tuple)):
             symbols = ','.join(symbols)
 
         params = {'symbols': symbols}
@@ -279,7 +285,7 @@ class Market(object):
             params['fids'] = ','.join(fields)
 
         path = self._api.join(BASE_URL, 'market', 'ext', 'quotes')
-        return self._api.get(path, params=params, **kwargs)
+        return self._api.post(path, data=params, **kwargs)
 
     def _toplist(self, list_type='toppctgainers', **kwargs):
         path = self._api.join(BASE_URL, 'market', 'toplists', list_type)
@@ -321,7 +327,7 @@ class TradeKing(object):
                         oauth_secret=oauth_secret)
 
     def _accounts(self, **kwargs):
-        path = urlparse.urljoin(BASE_URL, 'accounts')
+        path = urllib.parse.urljoin(BASE_URL, 'accounts')
         return self._api.get(path, **kwargs)
 
     def account(self, account_id):

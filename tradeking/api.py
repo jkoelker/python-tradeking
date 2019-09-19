@@ -270,6 +270,8 @@ class Options(object):
 class Market(object):
     def __init__(self, api):
         self._api = api
+        self.news = News(self._api)
+        self.options = Options(self._api, self)
 
     def _clock(self, **kwargs):
         path = self._api.join(BASE_URL, 'market', 'clock')
@@ -298,14 +300,6 @@ class Market(object):
         del r['@id']
         return r
 
-    @utils.cached_property(ttl=0)
-    def news(self):
-        return News(self._api)
-
-    @utils.cached_property(ttl=0)
-    def options(self):
-        return Options(self._api)
-
     def quotes(self, symbols, fields=None):
         r = self._quotes(symbols=symbols, fields=fields)
         return _quotes_to_df(r['response']['quotes']['quote'])
@@ -325,6 +319,7 @@ class TradeKing(object):
                         consumer_secret=consumer_secret,
                         oauth_token=oauth_token,
                         oauth_secret=oauth_secret)
+        self.market = Market(self._api)
 
     def _accounts(self, **kwargs):
         path = urllib.parse.urljoin(BASE_URL, 'accounts')
@@ -332,10 +327,6 @@ class TradeKing(object):
 
     def account(self, account_id):
         return Account(self._api, account_id)
-
-    @utils.cached_property(ttl=0)
-    def market(self):
-        return Market(self._api)
 
     # TODO(jkoelker) member/profile
     # TODO(jkoelker) utility/status

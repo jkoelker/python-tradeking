@@ -222,8 +222,9 @@ class News(object):
 
 
 class Options(object):
-    def __init__(self, api):
+    def __init__(self, api, market):
         self._api = api
+        self._market = market
 
     symbol = staticmethod(utils.option_symbol)
     symbols = staticmethod(utils.option_symbols)
@@ -265,6 +266,18 @@ class Options(object):
         r = self._strikes(symbol=symbol)
         strikes = r['response']['prices']['price']
         return pd.Series(strikes, dtype=float)
+
+    def quote(self, symbol, strikes=None, expirations=None, calls=True,
+              puts=True, fields=None):
+        if strikes is None:
+            strikes = self.strikes(symbol)
+
+        if expirations is None:
+            expirations = self.expirations(symbol)
+
+        symbols = utils.option_symbols(symbol, expirations, strikes, calls,
+                                       puts)
+        return self._market.quotes(symbols=symbols, fields=fields)
 
 
 class Market(object):
